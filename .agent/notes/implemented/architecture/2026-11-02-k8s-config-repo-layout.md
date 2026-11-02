@@ -35,3 +35,4 @@ Status: implemented
 - 应用与预览各一条命令：`kubectl apply -k namespaces/xxxistaken`、`kubectl diff -k namespaces/xxxistaken`。
 - 代价：布局把“一个命名空间一个目录”固定下来，跨命名空间共享的对象（ClusterRole、StorageClass 等）暂无归属；需要时新增顶层目录（如 `cluster/`）并另写 note，而不是塞进某个命名空间目录。
 - 代价：没有 overlay 分层，意味着出现环境差异时必须先补上 base/overlay 结构；在此之前各环境共享同一份清单。
+- 目录级约定还包括按命名空间注入 `managed-by: <ns>` 标签（值等于目录名），用于 `--prune -l` 的回收边界，见 [用 managed-by 标签划定 kubectl apply --prune 的回收范围](2026-11-02-managed-by-label-and-prune.md)。

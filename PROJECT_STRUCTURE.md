@@ -9,4 +9,6 @@ xxx.kube 是微服务的 Kubernetes 配置集中管理仓库：全部资源以�
 | `AGENTS.md` | 面向 agent 的工作区说明入口 |
 | `README.md` | 面向人的仓库用途与使用约定 |
 
-新增命名空间：复制 `namespaces/xxxistaken/` 目录，改写对象名与目录名（保持一致）。跨命名空间共享的对象（如 ClusterRole）尚无归属目录，需要时新增顶层目录并在 `.agent/notes/` 记录。
+每个 `namespaces/<ns>/kustomization.yaml` 都带 `labels` 转换器注入 `managed-by: <ns>`（值等于该目录的命名空间名），目录内所有资源自动获得该标签，供 `kubectl apply -k namespaces/<ns> --prune -l managed-by=<ns>` 回收。标签只在 Kustomization 中声明一次，不写进单个 YAML。
+
+新增命名空间：复制 `namespaces/xxxistaken/` 目录，把目录名、对象名与 `kustomization.yaml` 的 `managed-by` 值一并改成新命名空间名。跨命名空间共享的对象（如 ClusterRole）尚无归属目录，需要时新增顶层目录并在 `.agent/notes/` 记录。
