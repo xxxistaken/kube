@@ -2,7 +2,7 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 # 本目录下所有资源（含后续新增的 YAML）都会带上 managed-by=xxxistaken，
-# 用于 kubectl apply -k namespaces/xxxistaken --prune -l managed-by=xxxistaken。
+# 供同目录的 apply.sh 按 `--prune -l managed-by=xxxistaken` 回收已删除的对象。
 # 标签值必须等于本目录的命名空间名：复制目录新增命名空间时，这一行要跟着改。
 labels:
   - pairs:

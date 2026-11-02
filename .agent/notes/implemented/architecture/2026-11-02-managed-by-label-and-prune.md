@@ -67,6 +67,7 @@ kustomize 没有把目录名算进 label 值的机制，也不值得为此引入
 
 ## Consequences
 
+- 日常应用入口是每个单元目录自带的 `namespaces/<ns>/apply.sh`：预检、server dry-run 预演、确认后再 apply，见 [每个命名空间单元自带的应用脚本](../process/2026-11-02-apply-namespace-script.md)。
 - 新增资源零成本：在 `namespaces/<ns>/` 放 YAML、加进 `resources` 即可，标签自动到位，无需提醒。
 - 删除资源成了一条命令：从 `resources` 移除并 `kubectl apply -k namespaces/<ns> --prune -l managed-by=<ns>`，回收范围停在该命名空间单元。
 - 边界可核对：`kubectl get deploy,sts,ds,job,cronjob,svc,ing,cm,secret -n <ns> -l managed-by=<ns>` 列出的就是该单元管理的对象。
