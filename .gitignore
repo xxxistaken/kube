@@ -1,5 +1,5 @@
 .idea/
-.code/
+.vscode/
 
 .DS_Store
 Thumb.db
