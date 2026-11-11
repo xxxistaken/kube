@@ -2,7 +2,7 @@
 
 包含一个'PROJECT_STRUCTURE.md', 是持续更新的项目简要总结, 请直接读取此文件了解项目整体结构, 每次修改代码后如需要请更新.
 
-`.agent/notes/` 维护本工作区的 agents notes (决策/提案记录), 规则见 `.agent/notes/README.md`. 每个非平凡变更必须在同一变更中新增或更新至少一份 note (行为/架构/跨包约定/流程工具/测试策略/存储协议配置格式变更均属非平凡).
+`.agents/notes/` 维护本工作区的 agents notes (决策/提案记录), 规则见 `.agents/notes/README.md`. 每个非平凡变更必须在同一变更中新增或更新至少一份 note (行为/架构/跨包约定/流程工具/测试策略/存储协议配置格式变更均属非平凡).
 
 ## git commit 署名
 

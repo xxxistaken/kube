@@ -76,4 +76,4 @@ done
 
 ## 变更与决策
 
-结构性决策、被否决的方案记录在 [`.agent/notes/`](.agent/notes/README.md)：实现前写 `proposed/`，落地后转 `implemented/`。改动行为、布局、流程或配置格式时，同一变更内必须附带对应 note。
+结构性决策、被否决的方案记录在 [`.agents/notes/`](.agents/notes/README.md)：实现前写 `proposed/`，落地后转 `implemented/`。改动行为、布局、流程或配置格式时，同一变更内必须附带对应 note。
