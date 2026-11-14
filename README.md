@@ -7,7 +7,7 @@
 ## 目录
 
 ```
-namespaces/<namespace>/    # 一个命名空间及其基础配置，如 Namespace、ResourceQuota、LimitRange
+namespaces/<namespace>/    # 一个命名空间及其资源，如 Namespace、工作负载、Service、ResourceQuota
 ```
 
 ## 应用
@@ -19,7 +19,7 @@ kubectl diff -k namespaces/xxxistaken -n xxxistaken
 kubectl apply -k namespaces/xxxistaken -n xxxistaken
 ```
 
-`-n` 必须给出：清单里不写 `metadata.namespace`（见下节约定），归属由应用方决定；漏掉它，单元里新增的工作负载会落进 kubectl 的默认命名空间。
+`-n` 必须给出：清单里不写 `metadata.namespace`（见下节约定），归属由应用方决定；漏掉它，单元里新增的工作负载会落进 kubectl 的默认命名空间。`development` 单元里的 PostgreSQL 还需要同命名空间中预先存在的 Secret `secrets`（键 `dbPassword`），它不由本仓库创建或回收。
 
 渲染出的每个资源都带 `managed-by: <ns>` 标签，值等于所在目录的命名空间名，因此可以按标签回收已从仓库删除的资源：
 
@@ -55,7 +55,7 @@ done
 
 命名空间名由脚本所在目录决定，不需要参数，也没有 `-n` 覆盖入口。执行前它会校验 `kustomization.yaml` 的 `managed-by` 值等于目录名，再以 `-n <ns>` 应用：否则单元里的工作负载会落到 kubectl 的默认命名空间，prune 也不会在该命名空间里列举对象。`--` 之后的参数原样透传给 `kubectl apply`。
 
-脚本里的 `prune_allowlist` 声明本单元的回收类型（当前只有 `core/v1/Namespace`，随清单增长补足），kubectl 只按它列举、只回收这些类型。**这个列表只增不减**：开发者 pull 到新脚本时，他本地集群里仍有由旧版清单创建的对象，删掉某个类型会让这些对象再也无法被回收。新增类型时往对应单元的列表里加；通过 `--` 透传的 `--prune-allowlist` 是追加，不会替换脚本里的列表。
+脚本里的 `prune_allowlist` 声明本单元的回收类型（起步为 `core/v1/Namespace`；`development` 已按实际资源补上 `core/v1/Service` 与 `apps/v1/StatefulSet`），kubectl 只按它列举、只回收这些类型。**这个列表只增不减**：开发者 pull 到新脚本时，他本地集群里仍有由旧版清单创建的对象，删掉某个类型会让这些对象再也无法被回收。新增类型时往对应单元的列表里加；通过 `--` 透传的 `--prune-allowlist` 是追加，不会替换脚本里的列表。
 
 ## 约定
 

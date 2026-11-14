@@ -86,8 +86,11 @@ label_value=$(sed -n 's/^[[:space:]]*managed-by:[[:space:]]*\([^[:space:]#]*\).*
 [ "$label_value" = "$ns" ] ||
   die "managed-by 值是 $label_value，与目录名 $ns 不一致：prune 会匹配不到本目录的对象"
 
-# --prune 的目标类型，只列本单元【实际声明】的类型。当前目录只声明了 Namespace 对象，
-# 所以这里只有 core/v1/Namespace。
+# --prune 的目标类型，只列本单元【实际声明】的类型。当前目录声明了 Namespace、
+# Service 与 StatefulSet，所以下面列这三类。
+#
+# StatefulSet 的 PVC 由控制器按 volumeClaimTemplates 创建，不带 managed-by 标签，
+# 也不由 apply 管理；故意不列入 allowlist，避免把数据卷当成本单元对象回收。
 #
 # 列表只增不减：
 #   - 新增资源类型时，把对应 <group>/<version>/<Kind> 加进来，否则该类型的对象
@@ -97,6 +100,8 @@ label_value=$(sed -n 's/^[[:space:]]*managed-by:[[:space:]]*\([^[:space:]#]*\).*
 #     由旧版清单创建的对象仍需被 prune，删行会让它们永远留在集群里。
 prune_allowlist=(
   core/v1/Namespace
+  core/v1/Service
+  apps/v1/StatefulSet
 )
 
 context=$(kubectl config current-context 2>/dev/null || true)

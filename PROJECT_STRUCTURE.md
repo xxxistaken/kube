@@ -5,8 +5,8 @@ xxx.kube 是微服务的 Kubernetes 配置集中管理仓库：全部资源以�
 | 路径 | 说明 |
 | --- | --- |
 | `namespaces/xxxistaken/` | 命名空间 `xxxistaken` 的基础配置：`namespace.yaml`（Namespace 对象）与 `kustomization.yaml`（显式列出 resources） |
-| `namespaces/development/` | 命名空间 `development` 的基础配置：与 `xxxistaken/` 同构，`managed-by: development`，由同目录 `apply.sh` 独立应用与回收 |
-| `namespaces/<ns>/apply.sh` | 应用该命名空间单元：预检 + server dry-run 预演 + `kubectl apply -k namespaces/<ns> -n <ns> --prune -l managed-by=<ns> --prune-allowlist=...`，回收类型清单 (`prune_allowlist`，当前仅 `core/v1/Namespace`) 随单元维护且只增不减；见 [note](.agents/notes/implemented/process/2026-11-02-apply-namespace-script.md) |
+| `namespaces/development/` | 命名空间 `development` 的基础配置：与 `xxxistaken/` 同构（`managed-by: development`，独立 `apply.sh`）；另含 PostgreSQL StatefulSet（`postgres:18.7-trixie`，库/用户 `faary`，密码取自同命名空间 `secrets` 的 `dbPassword`） |
+| `namespaces/<ns>/apply.sh` | 应用该命名空间单元：预检 + server dry-run 预演 + `kubectl apply -k namespaces/<ns> -n <ns> --prune -l managed-by=<ns> --prune-allowlist=...`，回收类型清单 (`prune_allowlist`，起步为 `core/v1/Namespace`，`development` 已含 `core/v1/Service`、`apps/v1/StatefulSet`) 随单元维护且只增不减；见 [note](.agents/notes/implemented/process/2026-11-02-apply-namespace-script.md) |
 | `.agents/notes/` | Agent Notes，记录布局与流程决策；规则见 [`.agents/notes/README.md`](.agents/notes/README.md) |
 | `AGENTS.md` | 面向 agent 的工作区说明入口 |
 | `README.md` | 面向人的仓库用途与使用约定 |

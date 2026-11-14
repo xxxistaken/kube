@@ -11,3 +11,6 @@ labels:
 
 resources:
   - namespace.yaml
+  - postgres-headless-service.yaml
+  - postgres-service.yaml
+  - postgres-statefulset.yaml
