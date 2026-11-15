@@ -4,7 +4,7 @@ Status: implemented
 
 ## Problem
 
-`development` 单元原本只有命名空间对象，`faary` 应用没有数据库可用。所需数据库版本固定为 `postgres:18.7-trixie`，首次启动就要创建数据库 `faary` 与用户 `faary`，并让该用户对 `faary` 库拥有全部权限；密码已由集群侧准备好：Secret `secrets`（namespace `development`）的 `dbPassword` 键。仓库需要按“一个目录 = 一个可独立 apply 的命名空间单元”的约定声明这个有状态工作负载，同时保持 `apply.sh` 的回收边界正确、不把数据卷纳入 prune。
+`development` 单元原本只有命名空间对象，开发者在本地运行 faary 应用时没有数据库可用。该单元是开发者本地环境的便捷工程，不部署到任何生产环境。所需数据库版本固定为 `postgres:18.7-trixie`，首次启动就要创建数据库 `faary` 与用户 `faary`，并让该用户对 `faary` 库拥有全部权限；密码已由集群侧准备好：Secret `secrets`（namespace `development`）的 `dbPassword` 键。仓库需要按“一个目录 = 一个可独立 apply 的命名空间单元”的约定声明这个有状态工作负载，同时保持 `apply.sh` 的回收边界正确、不把数据卷纳入 prune。
 
 ## Decision
 
@@ -12,7 +12,7 @@ Status: implemented
 
 - `postgres-statefulset.yaml`：单副本 `StatefulSet postgres`，镜像 `postgres:18.7-trixie`；`POSTGRES_DB=faary`、`POSTGRES_USER=faary`、`POSTGRES_PASSWORD` 通过 `secretKeyRef` 读取 `secrets/dbPassword`。数据卷由 `volumeClaimTemplates` 声明（10Gi、`ReadWriteOnce`、默认 StorageClass），挂载到 `/var/lib/postgresql`。
 - `postgres-headless-service.yaml`：`clusterIP: None` 的 `postgres-headless`，作为 StatefulSet 的 governing Service，给 `postgres-0` 稳定网络标识。
-- `postgres-service.yaml`：`ClusterIP` 的 `postgres:5432`，供应用按服务名连接。
+- `postgres-service.yaml`：`ClusterIP` 的 `postgres:5432`，供本地运行的 faary 应用按服务名连接。
 
 `apply.sh` 的 `prune_allowlist` 追加 `core/v1/Service` 与 `apps/v1/StatefulSet`（只增不减）；不加入 `core/v1/PersistentVolumeClaim`。
 
@@ -36,8 +36,8 @@ Status: implemented
 
 ## Consequences
 
-- `development` 单元从纯命名空间变成含 StatefulSet、两个 Service 的单元；`apply.sh` 的回收类型相应扩展，`kubectl apply -k namespaces/development -n development` 可独立部署。
-- 部署前必须存在 `development/secrets` 且含 `dbPassword`，否则 Pod 无法启动；该 Secret 不随本单元创建或删除。
+- `development` 单元从纯命名空间变成含 StatefulSet、两个 Service 的单元；`apply.sh` 的回收类型相应扩展，可在开发者本地集群用 `kubectl apply -k namespaces/development -n development` 独立部署，该单元不进入生产环境。
+- 本地部署前必须存在 `development/secrets` 且含 `dbPassword`，否则 Pod 无法启动；该 Secret 不随本单元创建或删除。
 - `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` 只在首次初始化时生效；之后改 Secret 不会修改已有数据库的密码，需在库内执行 `ALTER USER faary WITH PASSWORD ...`。
 - 默认 StorageClass `local-path` 的回收策略是 `Delete`、不支持扩容，10Gi 数据卷绑定节点；迁移节点或扩容要另作处理。
 - 删除三个清单后 prune 只回收 Service/StatefulSet，PVC 保留；但若把整个目录删掉再 prune，Namespace 也在 allowlist 里，会连 Namespace 一起删除并级联删掉 PVC，local-path 的 PV 随之回收，数据仍会丢失——与 README 记录的 Namespace 级联风险一致。

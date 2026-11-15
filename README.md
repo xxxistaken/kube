@@ -10,7 +10,7 @@
 namespaces/<namespace>/    # 一个命名空间及其资源，如 Namespace、工作负载、Service、ResourceQuota
 ```
 
-`namespaces/faary/` 是业务的主要命名空间：业务应用及其资源都归属这里。`namespaces/development/` 存放开发环境的共享依赖（当前为 PostgreSQL），不属于业务负载。
+`namespaces/faary/` 是业务主命名空间，名字取自品牌 `faary`：业务应用及其资源都归属这里。`namespaces/development/` 是给开发者本地环境用的便捷工程——承载本地开发/调试所需的共享依赖（当前为 PostgreSQL），只在本机或本地集群应用，**不部署到任何生产环境**，也不属于业务负载。
 
 ## 应用
 
@@ -21,7 +21,7 @@ kubectl diff -k namespaces/faary -n faary
 kubectl apply -k namespaces/faary -n faary
 ```
 
-`-n` 必须给出：清单里不写 `metadata.namespace`（见下节约定），归属由应用方决定；漏掉它，单元里新增的工作负载会落进 kubectl 的默认命名空间。`development` 单元里的 PostgreSQL 还需要同命名空间中预先存在的 Secret `secrets`（键 `dbPassword`），它不由本仓库创建或回收。
+`-n` 必须给出：清单里不写 `metadata.namespace`（见下节约定），归属由应用方决定；漏掉它，单元里新增的工作负载会落进 kubectl 的默认命名空间。仅本地开发用的 `development` 单元里的 PostgreSQL 还需要同命名空间中预先存在的 Secret `secrets`（键 `dbPassword`），它不由本仓库创建或回收。
 
 渲染出的每个资源都带 `managed-by: <ns>` 标签，值等于所在目录的命名空间名，因此可以按标签回收已从仓库删除的资源：
 
@@ -36,6 +36,8 @@ for d in namespaces/*/; do
   "$d/apply.sh" --yes
 done
 ```
+
+这条循环会把 `development` 一并应用，因此只适用于开发者本地集群；生产环境只应用业务单元（当前为 `namespaces/faary/`），绝不能包含 `development`。
 
 `--prune -l` 只删除**带该标签、由 `apply` 打过 last-applied 注解、且不在本次渲染结果里**的对象：手工 `kubectl create` 的资源、以及标签值不同的其它命名空间的对象都不受影响。
 
@@ -69,6 +71,7 @@ done
 - 目录名、对象名、`managed-by` 值三者一致。值写错成别的命名空间，`--prune -l managed-by=<ns>` 就匹配不到这些对象，回收静默失效。
 - 一个目录里的资源只属于该命名空间，不跨目录放置：标签表达的是“由哪个命名空间单元管理”，放错目录的对象带错标签，`--prune -l` 同样看不见它。
 - 每个 `namespaces/<ns>/` 自带 `apply.sh`：命名空间名取自目录名，`prune_allowlist` 声明本单元可回收的类型且**只增不减**；新增类型时只改对应单元的脚本。
+- `development` 是开发者本地环境的便捷工程，只在开发者本机/本地集群应用；生产环境只应用业务单元（`faary`），任何自动化流程都不应把 `development` 纳入生产发布。
 - 非命名空间目录（如将来的 `cluster/`，存放 ClusterRole 等）没有对应的命名空间名可用，取值需届时单独决定并写 note，脚本也要另写。
 - 只依赖 `kubectl` 自带的 Kustomize（v1.27+），不引入额外渲染工具。
 

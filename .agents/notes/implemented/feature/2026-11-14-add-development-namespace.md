@@ -4,11 +4,11 @@ Status: implemented
 
 ## Problem
 
-仓库此前只有 `namespaces/xxxistaken/` 一个命名空间单元，开发/测试类负载没有独立的命名空间归属。按既有布局，一个目录 = 一个可独立 apply 的单元，`managed-by=<ns>` 标签同时决定该单元的 prune 回收边界；把开发资源混进 `xxxistaken` 会让两类负载共享同一个命名空间和回收边界，删减开发侧资源时无法按单元隔离。需要沿用既有布局新增一个 `development` 单元。
+仓库此前只有 `namespaces/xxxistaken/` 一个命名空间单元，开发者本地环境没有专用单元承载本地开发/调试依赖。按既有布局，一个目录 = 一个可独立 apply 的单元，`managed-by=<ns>` 标签同时决定该单元的 prune 回收边界；把本地开发资源混进 `xxxistaken` 会让本地开发与业务负载共享同一个命名空间和回收边界，删减本地开发资源时无法按单元隔离。需要沿用既有布局新增一个 `development` 单元——它只是开发者本地环境的便捷工程，不会应用在任何生产环境。
 
 ## Decision
 
-新增 `namespaces/development/`，内容由当时的占位单元 `namespaces/xxxistaken/`（该单元已于 [faary note](2026-11-15-add-faary-primary-namespace.md) 下线）复制并改名：
+新增 `namespaces/development/`，内容由当时的占位单元 `namespaces/xxxistaken/`（该单元已于 [faary note](2026-11-15-add-faary-primary-namespace.md) 下线）复制并改名。该单元只服务开发者本地环境，在本地集群应用，不部署到任何生产环境：
 
 - `namespace.yaml`：`Namespace` 对象名为 `development`，标签 `app.kubernetes.io/name: development`；不写 `metadata.namespace`，归属由 `-n` 决定。
 - `kustomization.yaml`：`resources` 显式列出 `namespace.yaml`；`labels` 转换器注入 `managed-by: development`（`includeSelectors: false`），仍是单元内该标签的唯一来源。
@@ -19,14 +19,14 @@ Status: implemented
 
 ## Alternatives considered
 
-- **复用 `xxxistaken` 命名空间**——省一个单元，但开发负载与既有负载共享命名空间和 prune 边界，无法独立回收，对象也混在一起；落选。
+- **复用 `xxxistaken` 命名空间**——省一个单元，但本地开发依赖与既有业务负载共享命名空间和 prune 边界，无法独立回收，对象也混在一起；落选。
 - **把 development 作为 `xxxistaken` 的 overlay 子目录**——overlay 会继承 base 的 `Namespace` 对象与 `managed-by` 值，命名空间对象仍需 patch 改名，单元与命名空间不再一一对应，还要另配 apply 路径与脚本；破坏既有“一个目录 = 一个命名空间单元”的布局；落选。
 - **把 Namespace 对象集中放到顶层 `cluster/` 目录**——该目录目前不存在，而且 Namespace 对象本身就带单元标签、由各单元自己回收；集中放置会改变已有的回收模型；落选。
 - **命名空间改叫 `dev`**——用户指定 `development`，且目录名、对象名、标签值三者必须一致；落选。
 
 ## Consequences
 
-- 开发负载有了独立的命名空间与回收边界，可以单独执行 `kubectl diff/apply -k namespaces/development -n development`；README 里的批量同步循环会自动带上它。
-- 多一个需要维护的单元：开发侧资源要放进该目录，新增资源类型时记得扩充它的 `prune_allowlist`（只增不减）。
+- 本地开发依赖有了独立的命名空间与回收边界，可在开发者本地集群单独执行 `kubectl diff/apply -k namespaces/development -n development`；README 的批量同步循环会把它一并应用，所以该循环只适用于本地集群，生产环境不应用 `development`。
+- 多一个需要维护的单元：本地开发资源要放进该目录，新增资源类型时记得扩充它的 `prune_allowlist`（只增不减）。
 - 沿用既有风险：`prune_allowlist` 含 `core/v1/Namespace`，删除该目录后 prune 会连 Namespace 一起删除，并级联清空其中的资源。
 - 跨命名空间/集群级共享资源（如 ClusterRole）仍无归属目录，本变更不引入这类资源。
