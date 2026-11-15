@@ -8,14 +8,14 @@ Status: implemented
 
 ## Decision
 
-新增 `namespaces/development/`，内容由 `namespaces/xxxistaken/` 复制并改名：
+新增 `namespaces/development/`，内容由当时的占位单元 `namespaces/xxxistaken/`（该单元已于 [faary note](2026-11-15-add-faary-primary-namespace.md) 下线）复制并改名：
 
 - `namespace.yaml`：`Namespace` 对象名为 `development`，标签 `app.kubernetes.io/name: development`；不写 `metadata.namespace`，归属由 `-n` 决定。
 - `kustomization.yaml`：`resources` 显式列出 `namespace.yaml`；`labels` 转换器注入 `managed-by: development`（`includeSelectors: false`），仍是单元内该标签的唯一来源。
-- `apply.sh`：与 `xxxistaken/` 的脚本逐字一致，未做重命名——命名空间名由脚本所在目录推出，帮助里的示例路径仅为示意。`prune_allowlist` 当前仍只有 `core/v1/Namespace`；该单元后续出现新资源类型时，往同一个数组里追加，列表只增不减。
+- `apply.sh`：与占位单元的脚本同构——命名空间名由脚本所在目录推出，帮助里的示例路径已改为本单元路径。`prune_allowlist` 起步只有 `core/v1/Namespace`，随后因 PostgreSQL 追加了 `core/v1/Service` 与 `apps/v1/StatefulSet`（见 [PostgreSQL note](2026-11-14-add-development-postgresql.md)），列表只增不减。
 - `PROJECT_STRUCTURE.md` 的目录表补充该单元。README 的“新增一个命名空间”流程无需改动，本单元正是按该流程产生。
 
-两个单元相互独立：`./namespaces/development/apply.sh` 只应用并 prune `-l managed-by=development` 的对象，不会碰到 `xxxistaken` 单元的资源。
+两个单元相互独立：`./namespaces/development/apply.sh` 只应用并 prune `-l managed-by=development` 的对象，不会碰到 `faary` 单元的资源。
 
 ## Alternatives considered
 

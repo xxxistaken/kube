@@ -19,9 +19,9 @@ usage() {
   -h, --help      显示本帮助
 
 示例:
-  ./namespaces/xxxistaken/apply.sh
-  ./namespaces/xxxistaken/apply.sh --dry-run
-  ./namespaces/xxxistaken/apply.sh --yes -- --force-conflicts
+  ./namespaces/development/apply.sh
+  ./namespaces/development/apply.sh --dry-run
+  ./namespaces/development/apply.sh --yes -- --force-conflicts
 EOF
 }
 

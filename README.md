@@ -10,13 +10,15 @@
 namespaces/<namespace>/    # 一个命名空间及其资源，如 Namespace、工作负载、Service、ResourceQuota
 ```
 
+`namespaces/faary/` 是业务的主要命名空间：业务应用及其资源都归属这里。`namespaces/development/` 存放开发环境的共享依赖（当前为 PostgreSQL），不属于业务负载。
+
 ## 应用
 
 每个目录自成一份 Kustomization，可独立渲染、diff 与 apply：
 
 ```bash
-kubectl diff -k namespaces/xxxistaken -n xxxistaken
-kubectl apply -k namespaces/xxxistaken -n xxxistaken
+kubectl diff -k namespaces/faary -n faary
+kubectl apply -k namespaces/faary -n faary
 ```
 
 `-n` 必须给出：清单里不写 `metadata.namespace`（见下节约定），归属由应用方决定；漏掉它，单元里新增的工作负载会落进 kubectl 的默认命名空间。`development` 单元里的 PostgreSQL 还需要同命名空间中预先存在的 Secret `secrets`（键 `dbPassword`），它不由本仓库创建或回收。
@@ -24,7 +26,7 @@ kubectl apply -k namespaces/xxxistaken -n xxxistaken
 渲染出的每个资源都带 `managed-by: <ns>` 标签，值等于所在目录的命名空间名，因此可以按标签回收已从仓库删除的资源：
 
 ```bash
-kubectl apply -k namespaces/xxxistaken -n xxxistaken --prune -l managed-by=xxxistaken
+kubectl apply -k namespaces/faary -n faary --prune -l managed-by=faary
 ```
 
 按目录批量同步时，用各单元自带的脚本：
@@ -41,16 +43,16 @@ done
 
 `--prune` 仍是 alpha 功能，先确认再执行。kubectl 的默认回收白名单只覆盖常用命名空间级资源与 `Namespace`、`PersistentVolume`，而且带 `-n` 时会打一条“未来不再默认回收集群级资源”的废弃告警——所以单元脚本显式列出了要回收的类型。
 
-注意单元脚本的 `prune_allowlist` 里含 `core/v1/Namespace`，而 Namespace 对象本身也带 `managed-by=<ns>`：删掉某个 `namespaces/<ns>/` 目录后再 prune，会连同 Namespace 对象一起删除，并级联清掉其中所有资源。若不想要这个行为，要在单元建立时就不把该类型放进列表——列表之后只能增不能减。
+注意单元脚本的 `prune_allowlist` 里含 `core/v1/Namespace`，而 Namespace 对象本身也带 `managed-by=<ns>`：从单元里去掉 Namespace 对象后再跑该单元的 `apply.sh --prune`，会连同 Namespace 一起删除，并级联清掉其中所有资源。若不想要这个行为，要在单元建立时就不把该类型放进列表——列表之后只能增不能减。整个目录被删除后，该单元的 `apply.sh` 也随之消失，`--prune` 不会再为它执行；下线一个单元要按同一标签选择器显式删除命名空间（如 `kubectl delete namespace -l managed-by=<ns>`），边界仍由 `managed-by=<ns>` 决定。
 
 ### 每个命名空间自带的 `apply.sh`
 
 `namespaces/<ns>/apply.sh` 把上面那条命令固化下来，并把“先预演、再确认”设为默认：
 
 ```bash
-./namespaces/xxxistaken/apply.sh             # server dry-run 预演 → 确认 → apply --prune
-./namespaces/xxxistaken/apply.sh --dry-run   # 只预演
-./namespaces/xxxistaken/apply.sh --yes       # 跳过确认（脚本 / CI 用）
+./namespaces/faary/apply.sh             # server dry-run 预演 → 确认 → apply --prune
+./namespaces/faary/apply.sh --dry-run   # 只预演
+./namespaces/faary/apply.sh --yes       # 跳过确认（脚本 / CI 用）
 ```
 
 命名空间名由脚本所在目录决定，不需要参数，也没有 `-n` 覆盖入口。执行前它会校验 `kustomization.yaml` 的 `managed-by` 值等于目录名，再以 `-n <ns>` 应用：否则单元里的工作负载会落到 kubectl 的默认命名空间，prune 也不会在该命名空间里列举对象。`--` 之后的参数原样透传给 `kubectl apply`。
@@ -72,7 +74,7 @@ done
 
 ## 新增一个命名空间
 
-复制 `namespaces/xxxistaken/`，把目录名、`namespace.yaml` 的 `metadata.name` 与 `app.kubernetes.io/name`、以及 `kustomization.yaml` 里的 `managed-by` 值，全部改成新命名空间名。四处漏改一处，prune 的回收边界就会落错位。目录里的 `apply.sh` 不用改——命名空间名取自目录名，要改的只是它那份 `prune_allowlist`：按新单元实际会创建的类型补足，且只增不减。
+复制 `namespaces/faary/`，把目录名、`namespace.yaml` 的 `metadata.name` 与 `app.kubernetes.io/name`、以及 `kustomization.yaml` 里的 `managed-by` 值，全部改成新命名空间名。四处漏改一处，prune 的回收边界就会落错位。目录里的 `apply.sh` 不用改——命名空间名取自目录名，要改的只是它那份 `prune_allowlist`：按新单元实际会创建的类型补足，且只增不减。
 
 ## 变更与决策
 
