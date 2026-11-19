@@ -14,3 +14,6 @@ resources:
   - postgres-headless-service.yaml
   - postgres-service.yaml
   - postgres-statefulset.yaml
+  - valkey-headless-service.yaml
+  - valkey-service.yaml
+  - valkey-statefulset.yaml
