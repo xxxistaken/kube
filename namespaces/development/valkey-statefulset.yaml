@@ -27,6 +27,14 @@ spec:
             - name: valkey
               containerPort: 6379
               protocol: TCP
+          env:
+            # Secret secrets/vkPassword 由集群侧维护，不在本仓库内；
+            # Kubernetes 会在 args 中把 $(VALKEY_PASSWORD) 展开成实际密码。
+            - name: VALKEY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: secrets
+                  key: vkPassword
           # 镜像的 ENTRYPOINT 会先以 root 把 /data 的属主改成 valkey，再降权运行，
           # 所以这里只需给出启动参数；必须保留 valkey-server 作为第一个参数。
           args:
@@ -37,16 +45,24 @@ spec:
             - "yes"
             - --appendfsync
             - everysec
+            - --requirepass
+            - $(VALKEY_PASSWORD)
           readinessProbe:
             exec:
-              command: ["valkey-cli", "ping"]
+              command:
+                - sh
+                - -c
+                - 'test "$(valkey-cli --no-auth-warning -a "$VALKEY_PASSWORD" ping)" = "PONG"'
             initialDelaySeconds: 3
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
           livenessProbe:
             exec:
-              command: ["valkey-cli", "ping"]
+              command:
+                - sh
+                - -c
+                - 'test "$(valkey-cli --no-auth-warning -a "$VALKEY_PASSWORD" ping)" = "PONG"'
             initialDelaySeconds: 10
             periodSeconds: 20
             timeoutSeconds: 3

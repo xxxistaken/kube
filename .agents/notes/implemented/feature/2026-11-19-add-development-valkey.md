@@ -12,7 +12,7 @@ Status: implemented
 
 在 `namespaces/development/` 新增三个清单，并在 `kustomization.yaml` 的 `resources` 中显式列出：
 
-- `valkey-statefulset.yaml`：单副本 `StatefulSet valkey`，镜像 `valkey/valkey:9-trixie`；`args` 为 `valkey-server --dir /data --appendonly yes --appendfsync everysec`；数据卷由 `volumeClaimTemplates` 声明（1Gi、`ReadWriteOnce`、默认 StorageClass），挂载到 `/data`；就绪与存活探针都是 `valkey-cli ping`；容器内存上限 512Mi。
+- `valkey-statefulset.yaml`：单副本 `StatefulSet valkey`，镜像 `valkey/valkey:9-trixie`；`args` 为 `valkey-server --dir /data --appendonly yes --appendfsync everysec`，后续加入密码校验时追加 `--requirepass $(VALKEY_PASSWORD)`（见 [Valkey 密码 note](2026-11-19-add-valkey-password.md)）；数据卷由 `volumeClaimTemplates` 声明（1Gi、`ReadWriteOnce`、默认 StorageClass），挂载到 `/data`；就绪与存活探针校验带密码的 `valkey-cli ping` 输出为 `PONG`；容器内存上限 512Mi。
 - `valkey-headless-service.yaml`：`clusterIP: None` 的 `valkey-headless`，作为 StatefulSet 的 governing Service，给 `valkey-0` 稳定网络标识。
 - `valkey-service.yaml`：`ClusterIP` 的 `valkey:6379`，供本地运行的应用按服务名连接。
 
@@ -20,7 +20,7 @@ Status: implemented
 
 关键取舍：
 
-- **不设访问密码**：集群侧预先存在的 Secret `secrets` 只有 `dbPassword` 键，没有 Valkey 密码；本仓库也不存放密码。镜像在构建时已关闭 protected-mode，Valkey 只通过 ClusterIP 在集群内暴露，没有 NodePort、Ingress 或 LoadBalancer。本地开发集群接受这个边界，README 已声明该单元不进入生产。
+- **无访问密码（初版，已被取代）**：初版按无密码部署，因为集群侧 Secret `secrets` 当时只有 `dbPassword` 键、本仓库也不存放密码；Valkey 只通过 ClusterIP 在集群内暴露，没有 NodePort、Ingress 或 LoadBalancer。该取舍已由 [Valkey 密码 note](2026-11-19-add-valkey-password.md) 取代：现在通过 `secrets/vkPassword` 设置 `--requirepass`。
 - **AOF 持久化**：`--appendonly yes --appendfsync everysec` 让每次写入最多丢 1 秒；默认 RDB 快照点保留。这样 `kubectl delete pod` 或节点重启后缓存/会话仍然可用，更贴近“共享开发依赖”的定位。
 - **单副本 StatefulSet**：本地开发没有高可用需求；用 StatefulSet 只是为了 `volumeClaimTemplates` 和稳定标识，不配置主从、Sentinel 或 Cluster 模式。
 - **浮动 tag**：用户指定 `9-trixie`，跟随 9.x 的最新 trixie 构建；代价是重新拉取镜像时可能升级到新的 9.x 补丁版本（见 Consequences）。
@@ -33,7 +33,7 @@ Status: implemented
 
 - `./namespaces/development/apply.sh --dry-run` 显示 `service/valkey`、`service/valkey-headless`、`statefulset.apps/valkey` 为 created，PostgreSQL 的三个对象为 unchanged/configured；随后 `apply.sh --yes` 实际应用。
 - `valkey-0` 变为 `1/1 Running`，PVC `data-valkey-0` 绑定 1Gi；事件里镜像 `valkey/valkey:9-trixie` 拉取成功，容器内 `valkey-server --version` 为 `9.1.4`。
-- 在临时 Pod 中执行 `valkey-cli -h valkey ping` 返回 `PONG`，确认 ClusterIP Service 可以按服务名访问。
+- 初版在临时 Pod 中执行 `valkey-cli -h valkey ping` 返回 `PONG`，确认 ClusterIP Service 可以按服务名访问；加入密码后该检查改为带 `vkPassword` 执行，见 [Valkey 密码 note](2026-11-19-add-valkey-password.md)。
 - 写入 `smoke:key=hello` 后删除 `valkey-0`，重建后 `get smoke:key` 仍返回 `hello`；`/data/appendonlydir` 下存在 AOF 文件，`INFO persistence` 的 `aof_enabled` 为 `1`。
 - `kubectl diff -k namespaces/development -n development` 输出为空，PostgreSQL 未受影响。
 
@@ -43,7 +43,7 @@ Status: implemented
 - **不持久化（`emptyDir` 或纯内存）**——更简单，但 Pod 重建即丢数据，作为共享开发依赖需要应用每次重建缓存；落选。
 - **把 Valkey 放进 `faary` 命名空间**——Valkey 只在本地开发使用，混进业务命名空间会共享 `managed-by=faary` 的回收边界，删减本地依赖时可能影响业务对象；落选。
 - **固定到 `9.1.4-trixie`**——可复现性更好，但用户明确要求 `9-trixie`；落选。
-- **设置 `requirepass`**——需要新增 Secret 键或把密码写进仓库：前者要求集群侧先准备一个不存在的键，后者把密码入库；两者都超出本单元职责；落选。若日后需要认证，应新增外部 Secret 键并以 `secretKeyRef` 注入 `--requirepass`。
+- **设置 `requirepass`**——需要新增 Secret 键或把密码写进仓库：前者要求集群侧先准备一个不存在的键，后者把密码入库；两者都超出本单元职责；落选。若日后需要认证，应新增外部 Secret 键并以 `secretKeyRef` 注入 `--requirepass`；该方案随后被采纳，见 [Valkey 密码 note](2026-11-19-add-valkey-password.md)。
 - **改用 Redis 官方镜像**——协议兼容且更常见，但该依赖已选定 Valkey，tag `9-trixie` 也由用户指定；落选。
 - **主从 / Sentinel / Cluster**——本地开发没有故障转移和分片需求，三副本还会把内存与卷占用放大三倍；落选。
 - **设置 `maxmemory` 与 `allkeys-lru`**——能避免 OOMKill，但会静默淘汰被应用当作持久数据使用的 key；不替使用者决定语义；落选。
@@ -51,7 +51,7 @@ Status: implemented
 ## Consequences
 
 - `development` 单元增加 1 个 StatefulSet、2 个 Service 和 1Gi 的 PVC；本地集群多占约 512Mi 内存上限和 1Gi 磁盘。
-- 任何能访问 `development` 命名空间的 Pod 都可以无认证读写 Valkey。不要在任何生产环境应用该单元；不要把端口转发暴露到不可信网络。
+- 初版中任何能访问 `development` 命名空间的 Pod 都可以无认证读写 Valkey；加入密码后需要 `secrets/vkPassword`（见 [Valkey 密码 note](2026-11-19-add-valkey-password.md)）。不要在任何生产环境应用该单元；不要把端口转发暴露到不可信网络。
 - `9-trixie` 是浮动 tag：节点重新拉取镜像时可能拿到新的 9.x 版本。需要可复现或固定补丁版本时改成 `9.1.4-trixie` 这类具体 tag，并在 note 中记录。
 - AOF 会持续增长，Valkey 会按 `auto-aof-rewrite-percentage` 自动重写；1Gi 卷对本地开发足够，但 `local-path` 的回收策略是 `Delete` 且不支持扩容，容量不足时要另建更大的卷。
 - 未设置 `maxmemory`：写入量超过容器 512Mi 上限时 Valkey 会被 OOMKill，随后由 StatefulSet 重新拉起并重放 AOF；需要淘汰语义时应显式加 `--maxmemory` 与 `--maxmemory-policy`。

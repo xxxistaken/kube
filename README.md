@@ -21,7 +21,7 @@ kubectl diff -k namespaces/faary -n faary
 kubectl apply -k namespaces/faary -n faary
 ```
 
-`-n` 必须给出：清单里不写 `metadata.namespace`（见下节约定），归属由应用方决定；漏掉它，单元里新增的工作负载会落进 kubectl 的默认命名空间。仅本地开发用的 `development` 单元里的 PostgreSQL 还需要同命名空间中预先存在的 Secret `secrets`（键 `dbPassword`），它不由本仓库创建或回收；Valkey 不设访问密码，只通过 `valkey:6379` 的 ClusterIP 在集群内提供。
+`-n` 必须给出：清单里不写 `metadata.namespace`（见下节约定），归属由应用方决定；漏掉它，单元里新增的工作负载会落进 kubectl 的默认命名空间。仅本地开发用的 `development` 单元里的 PostgreSQL 与 Valkey 都需要同命名空间中预先存在的 Secret `secrets`（键分别为 `dbPassword` 与 `vkPassword`），它不由本仓库创建或回收；Valkey 通过 `valkey:6379` 的 ClusterIP 在集群内提供并要求密码认证。
 
 渲染出的每个资源都带 `managed-by: <ns>` 标签，值等于所在目录的命名空间名，因此可以按标签回收已从仓库删除的资源：
 
