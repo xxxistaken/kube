@@ -10,7 +10,7 @@
 namespaces/<namespace>/    # 一个命名空间及其资源，如 Namespace、工作负载、Service、ResourceQuota
 ```
 
-`namespaces/faary/` 是业务主命名空间，名字取自品牌 `faary`：业务应用及其资源都归属这里。`namespaces/development/` 是给开发者本地环境用的便捷工程——承载本地开发/调试所需的共享依赖（当前为 PostgreSQL 与 Valkey），只在本机或本地集群应用，**不部署到任何生产环境**，也不属于业务负载。
+`namespaces/faary/` 是业务主命名空间，名字取自品牌 `faary`：业务应用及其资源都归属这里。`namespaces/development/` 是给开发者本地环境用的便捷工程——承载本地开发/调试所需的共享依赖（当前为 PostgreSQL、Valkey 与 Temporal；Temporal 以 Helm release 管理，见下文），只在本机或本地集群应用，**不部署到任何生产环境**，也不属于业务负载。
 
 ## 应用
 
@@ -37,7 +37,7 @@ for d in namespaces/*/; do
 done
 ```
 
-这条循环会把 `development` 一并应用，因此只适用于开发者本地集群；生产环境只应用业务单元（当前为 `namespaces/faary/`），绝不能包含 `development`。
+这条循环会把 `development` 一并应用，因此只适用于开发者本地集群；生产环境只应用业务单元（当前为 `namespaces/faary/`），绝不能包含 `development`。它只覆盖 kustomize 清单：`development` 里由 Helm 管理的 Temporal 不在其中，见下文。
 
 `--prune -l` 只删除**带该标签、由 `apply` 打过 last-applied 注解、且不在本次渲染结果里**的对象：手工 `kubectl create` 的资源、以及标签值不同的其它命名空间的对象都不受影响。
 
@@ -46,6 +46,20 @@ done
 `--prune` 仍是 alpha 功能，先确认再执行。kubectl 的默认回收白名单只覆盖常用命名空间级资源与 `Namespace`、`PersistentVolume`，而且带 `-n` 时会打一条“未来不再默认回收集群级资源”的废弃告警——所以单元脚本显式列出了要回收的类型。
 
 注意单元脚本的 `prune_allowlist` 里含 `core/v1/Namespace`，而 Namespace 对象本身也带 `managed-by=<ns>`：从单元里去掉 Namespace 对象后再跑该单元的 `apply.sh --prune`，会连同 Namespace 一起删除，并级联清掉其中所有资源。若不想要这个行为，要在单元建立时就不把该类型放进列表——列表之后只能增不能减。整个目录被删除后，该单元的 `apply.sh` 也随之消失，`--prune` 不会再为它执行；下线一个单元要按同一标签选择器显式删除命名空间（如 `kubectl delete namespace -l managed-by=<ns>`），边界仍由 `managed-by=<ns>` 决定。
+
+### `development` 里的 Temporal（Helm）
+
+`development` 里还跑一个 Temporal 工作流引擎，用于本地开发。它是本仓库“只用声明式 YAML、只用 kubectl 自带 Kustomize”的**唯一有意例外**：以 Helm release `temporal` 部署（chart `temporal` 1.8.0，appVersion 1.32.2），持久化复用同命名空间的 PostgreSQL（库 `temporal` / `temporal_visibility`，密码取 `secrets/dbPassword`）。它不在 `kustomization.yaml` 里，`apply.sh` 不创建也不回收它，生命周期由 Helm 负责；配置固定在 [`namespaces/development/temporal-values.yaml`](namespaces/development/temporal-values.yaml)，理由与取舍见 [note](.agents/notes/implemented/feature/2026-11-24-add-development-temporal.md)。
+
+```bash
+# 前提：development 里已有 secrets（dbPassword）与 postgres，由 apply.sh 创建
+./namespaces/development/apply.sh --yes
+helm upgrade --install temporal temporal \
+  --repo https://go.temporal.io/helm-charts --version 1.8.0 \
+  -n development -f namespaces/development/temporal-values.yaml
+```
+
+集群内按服务名访问：`temporal-frontend:7233`（gRPC）与 `temporal-web:8080`（UI）；从宿主机看 UI 用 `kubectl -n development port-forward svc/temporal-web 8080:8080`。卸载用 `helm uninstall temporal -n development`：这些对象不带 `managed-by` 标签，`kubectl apply ... --prune` 看不到它们，反过来 `apply.sh` 也不会误删。
 
 ### 每个命名空间自带的 `apply.sh`
 
@@ -64,6 +78,7 @@ done
 ## 约定
 
 - 只用声明式 YAML，`apiVersion` / `kind` 显式书写，缩进 2 空格。
+- 上述约定的唯一例外是 `development` 里的 Temporal：由 Helm release `temporal` 管理（values 在 `namespaces/development/temporal-values.yaml`），不进 `kustomization.yaml`，也不受 `apply.sh` 的 prune 影响；新增类似例外要单独决策并写 note。
 - 目录名与其中对象的 `metadata.name` 一致，统一 kebab-case。
 - 一个目录 = 一个可独立 apply 的单元，目录内用 `kustomization.yaml` 的 `resources` 显式列出资源，不依赖隐式加载。
 - 命名空间级对象不写 `metadata.namespace`，由应用方（`-n`、overlay 或 CD 控制器）决定。

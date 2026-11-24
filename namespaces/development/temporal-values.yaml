@@ -1,0 +1,63 @@
+# Temporal（development 命名空间）的 Helm values。
+#
+# 这份文件不参与 kustomize：Temporal 由 Helm release `temporal` 管理，
+# 不在 kustomization.yaml 的 resources 里，apply.sh 不创建也不回收它。
+# 决策与取舍见 .agents/notes/implemented/feature/2026-11-24-add-development-temporal.md。
+#
+# 安装/升级（chart 1.8.0 = appVersion 1.32.2）：
+#   helm upgrade --install temporal temporal \
+#     --repo https://go.temporal.io/helm-charts --version 1.8.0 \
+#     -n development -f namespaces/development/temporal-values.yaml
+# 前提：本命名空间的 secrets/dbPassword 与 postgres 已存在（由 apply.sh 创建）。
+server:
+  replicaCount: 1
+  config:
+    logLevel: "info"
+    persistence:
+      defaultStore: default
+      visibilityStore: visibility
+      numHistoryShards: 512
+      datastores:
+        default:
+          sql:
+            createDatabase: true
+            manageSchema: true
+            pluginName: postgres12
+            databaseName: temporal
+            connectAddr: "postgres.development.svc.cluster.local:5432"
+            connectProtocol: "tcp"
+            user: faary
+            existingSecret: secrets
+            secretKey: dbPassword
+            maxConns: 20
+            maxIdleConns: 20
+            maxConnLifetime: "1h"
+        visibility:
+          sql:
+            createDatabase: true
+            manageSchema: true
+            pluginName: postgres12
+            databaseName: temporal_visibility
+            connectAddr: "postgres.development.svc.cluster.local:5432"
+            connectProtocol: "tcp"
+            user: faary
+            existingSecret: secrets
+            secretKey: dbPassword
+            maxConns: 20
+            maxIdleConns: 20
+            maxConnLifetime: "1h"
+    namespaces:
+      create: true
+      namespace:
+        - name: default
+          retention: "72h"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+web:
+  enabled: true
+admintools:
+  enabled: true
