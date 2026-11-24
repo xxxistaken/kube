@@ -32,7 +32,7 @@ Status: implemented
 - `kubectl -n development get pods -l app.kubernetes.io/instance=temporal`：`temporal-admintools`、`temporal-frontend`、`temporal-history`、`temporal-matching`、`temporal-web`、`temporal-worker` 六个 Pod 全部 `1/1 Running`。
 - `kubectl -n development exec deploy/temporal-admintools -- temporal operator cluster health` 返回 `SERVING`；`temporal operator namespace list` 显示内置 `temporal-system` 与新建的 `default`（`72h0m0s`）。
 - `kubectl -n development exec postgres-0 -- psql -U faary -d postgres -tAc "select datname from pg_database"` 中出现 `temporal` 与 `temporal_visibility`，由 superuser `faary` 创建。
-- `kubectl -n development port-forward svc/temporal-web 18080:8080` 后 `GET /` 返回 200，`/api/v1/system-info` 的 `serverVersion` 为 `1.32.2`。
+- 直接访问 `http://temporal-web.development.svc.cluster.local:8080`（本机可解析 `*.svc.cluster.local`，无需 port-forward）返回 200，`/api/v1/system-info` 的 `serverVersion` 为 `1.32.2`。
 - 升级 UI 到 2.58.1 后，返回的 HTML 中 CSP meta 从 `script-src 'strict-dynamic' 'sha256-In64…'` 变成 `script-src 'self' 'sha256-vcq…'`；headless Chrome 156 下页面正常渲染出 Namespace/Workflow 列表，控制台没有 CSP 报错。Chrome 158+ 的白屏问题以官方 2.58.1 的修复说明为准（本机 headless Chrome 版本低于 158，无法在本机复现原故障）。
 - `kubectl diff -k namespaces/development -n development` 无输出：PostgreSQL 与 Valkey 的既有对象未被改动。
 - `temporal-matching` 首次启动重启 1 次（就绪探针在 gRPC 端口开始监听前失败），随后稳定；属于启动期噪声，与配置无关。
@@ -55,5 +55,5 @@ Status: implemented
 - 本地资源占用：6 个 Deployment（其中 web、admintools 各 1 副本）+ 6 个 Service，实测多占约 1~2Gi 内存；数据不占 PVC，落在已有 PostgreSQL 的 `temporal` / `temporal_visibility` 库里。
 - UI 被钉在 `temporalio/ui:2.58.1`：升级 chart 不会自动换成 chart 的新默认版本，每次 chart 升级都要复核这个 pin 能否删掉（见 Decision）。
 - `secrets/dbPassword` 仍是外部依赖：Secret 缺失时 schema Job 与 server Pod 都起不来。轮换 Secret 不会改数据库里既有的密码；要真正轮换，需要同时改 PostgreSQL 里的密码并重启 Temporal Pod。
-- 访问方式：集群内 `temporal-frontend:7233`（gRPC）、`temporal-web:8080`（UI）；宿主机用 `kubectl -n development port-forward svc/temporal-web 8080:8080` 或 `kubectl -n development port-forward svc/temporal-frontend 7233:7233`。该单元仍只用于本地开发，任何自动化流程都不应把它纳入生产发布。
+- 访问方式：`temporal-frontend:7233`（gRPC）、`temporal-web:8080`（UI）。本机（OrbStack）直接解析 `*.svc.cluster.local`，用 `http://temporal-web.development.svc.cluster.local:8080` 即可；不在集群网络内的机器用 `kubectl -n development port-forward svc/temporal-web 8080:8080`（或 frontend 7233）兜底。该单元仍只用于本地开发，任何自动化流程都不应把它纳入生产发布。
 - `go.temporal.io` 的 chart 仓库在本机曾间歇连不上（curl TLS 报错，稍后恢复）；遇到时可以用 `git clone https://github.com/temporalio/helm-charts` 后以 `charts/temporal` 作为 chart 路径安装，但 clone 的 `main` 可能与已发布 chart 内容不同（UI 镜像 tag 就曾不一致），只能作兜底，并先 `helm template` 对比差异。

@@ -59,7 +59,7 @@ helm upgrade --install temporal temporal \
   -n development -f namespaces/development/temporal-values.yaml
 ```
 
-集群内按服务名访问：`temporal-frontend:7233`（gRPC）与 `temporal-web:8080`（UI）；从宿主机看 UI 用 `kubectl -n development port-forward svc/temporal-web 8080:8080`。卸载用 `helm uninstall temporal -n development`：这些对象不带 `managed-by` 标签，`kubectl apply ... --prune` 看不到它们，反过来 `apply.sh` 也不会误删。
+集群内按服务名访问：`temporal-frontend:7233`（gRPC）与 `temporal-web:8080`（UI）。本机（OrbStack）能直接解析 `*.svc.cluster.local`，浏览器打开 `http://temporal-web.development.svc.cluster.local:8080` 即可，不需要 port-forward；不在集群网络内的机器再退回 `kubectl -n development port-forward svc/temporal-web 8080:8080`。卸载用 `helm uninstall temporal -n development`：这些对象不带 `managed-by` 标签，`kubectl apply ... --prune` 看不到它们，反过来 `apply.sh` 也不会误删。
 
 ### 每个命名空间自带的 `apply.sh`
 
