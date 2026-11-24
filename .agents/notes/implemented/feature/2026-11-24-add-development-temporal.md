@@ -16,6 +16,7 @@ Status: implemented
 - **密码**：`existingSecret: secrets` + `secretKey: dbPassword`，复用集群侧已存在的同命名空间 Secret（与 PostgreSQL 用的是同一份密码，见 [PostgreSQL note](2026-11-14-add-development-postgresql.md)）。chart 只把 `secretKeyRef` 写进 Pod env（`TEMPORAL_DEFAULT_STORE_PASSWORD` / `TEMPORAL_VISIBILITY_STORE_PASSWORD`），ConfigMap 里的 `password` 是 `{{ env ... }}` 占位，明文不进 ConfigMap。
 - **命名空间**：`server.config.namespaces.create: true`，post-install hook 注册名为 `default` 的 Temporal namespace（保留期 72h）；Temporal 内置的 `temporal-system` 由 server 自己创建。
 - **组件**：`web` 与 `admintools` 保持开启。UI 由 `temporal-web:8080` 提供；`temporal` CLI 通过 `kubectl -n development exec deploy/temporal-admintools -- temporal ...` 使用，前端地址为 `temporal-frontend:7233`。
+- **UI 镜像**：`web.image.tag: "2.58.1"`，覆盖 chart 1.8.0 默认的 `2.56.1`。2.56.1 返回的页面带 `script-src 'strict-dynamic' 'sha256-…'` 的 CSP meta，在 Chrome 158+ 会整页白屏；2.58.1 改为 `script-src 'self' 'sha256-…'`（[release note](https://github.com/temporalio/ui/releases/tag/v2.58.1)）。chart 升级后要确认新的默认 UI 已包含该修复，再删掉这个 pin。
 - **规模**：`server.replicaCount: 1`（frontend / history / matching / worker 各一个副本），server 容器 requests 100m/256Mi、内存上限 1Gi。Temporal 自身不建 PVC：状态全部落在 PostgreSQL。
 
 这是本仓库“只用声明式 YAML、只用 kubectl 自带 Kustomize”约定的**有意例外**，README 与 PROJECT_STRUCTURE 已同步声明：Temporal 的对象不带 `managed-by` 标签，`apply.sh --prune -l managed-by=development` 列举不到它们（不会误删），`helm uninstall` 也不会碰 kustomize 管理的对象。选择 Helm 而不是入库的渲染清单，核心原因是 chart 用 Helm hook 保证建表先于 server 启动，见 [Alternatives considered](#alternatives-considered)。
@@ -32,6 +33,7 @@ Status: implemented
 - `kubectl -n development exec deploy/temporal-admintools -- temporal operator cluster health` 返回 `SERVING`；`temporal operator namespace list` 显示内置 `temporal-system` 与新建的 `default`（`72h0m0s`）。
 - `kubectl -n development exec postgres-0 -- psql -U faary -d postgres -tAc "select datname from pg_database"` 中出现 `temporal` 与 `temporal_visibility`，由 superuser `faary` 创建。
 - `kubectl -n development port-forward svc/temporal-web 18080:8080` 后 `GET /` 返回 200，`/api/v1/system-info` 的 `serverVersion` 为 `1.32.2`。
+- 升级 UI 到 2.58.1 后，返回的 HTML 中 CSP meta 从 `script-src 'strict-dynamic' 'sha256-In64…'` 变成 `script-src 'self' 'sha256-vcq…'`；headless Chrome 156 下页面正常渲染出 Namespace/Workflow 列表，控制台没有 CSP 报错。Chrome 158+ 的白屏问题以官方 2.58.1 的修复说明为准（本机 headless Chrome 版本低于 158，无法在本机复现原故障）。
 - `kubectl diff -k namespaces/development -n development` 无输出：PostgreSQL 与 Valkey 的既有对象未被改动。
 - `temporal-matching` 首次启动重启 1 次（就绪探针在 gRPC 端口开始监听前失败），随后稳定；属于启动期噪声，与配置无关。
 
@@ -51,6 +53,7 @@ Status: implemented
 - Helm 创建的对象不在 `managed-by=development` 的回收边界内：删掉 `temporal-values.yaml` 不会让集群里的 Temporal 消失，必须 `helm uninstall temporal -n development`；反过来 `--prune` 也不会因为渲染结果里没有它们而误删。
 - 升级用 `helm upgrade --install temporal temporal --repo https://go.temporal.io/helm-charts --version <新版本> -n development -f namespaces/development/temporal-values.yaml`；`numHistoryShards` 首装后不可修改。升级会滚动重启所有 server Pod。若数据库被删除，依赖 `pre-install`/`pre-upgrade` 的 schema Job，需要触发一次升级或手动重跑。
 - 本地资源占用：6 个 Deployment（其中 web、admintools 各 1 副本）+ 6 个 Service，实测多占约 1~2Gi 内存；数据不占 PVC，落在已有 PostgreSQL 的 `temporal` / `temporal_visibility` 库里。
+- UI 被钉在 `temporalio/ui:2.58.1`：升级 chart 不会自动换成 chart 的新默认版本，每次 chart 升级都要复核这个 pin 能否删掉（见 Decision）。
 - `secrets/dbPassword` 仍是外部依赖：Secret 缺失时 schema Job 与 server Pod 都起不来。轮换 Secret 不会改数据库里既有的密码；要真正轮换，需要同时改 PostgreSQL 里的密码并重启 Temporal Pod。
 - 访问方式：集群内 `temporal-frontend:7233`（gRPC）、`temporal-web:8080`（UI）；宿主机用 `kubectl -n development port-forward svc/temporal-web 8080:8080` 或 `kubectl -n development port-forward svc/temporal-frontend 7233:7233`。该单元仍只用于本地开发，任何自动化流程都不应把它纳入生产发布。
 - `go.temporal.io` 的 chart 仓库在本机曾间歇连不上（curl TLS 报错，稍后恢复）；遇到时可以用 `git clone https://github.com/temporalio/helm-charts` 后以 `charts/temporal` 作为 chart 路径安装，但 clone 的 `main` 可能与已发布 chart 内容不同（UI 镜像 tag 就曾不一致），只能作兜底，并先 `helm template` 对比差异。

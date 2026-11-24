@@ -59,5 +59,10 @@ server:
       memory: 1Gi
 web:
   enabled: true
+  image:
+    # chart 1.8.0 默认 ui 2.56.1：它的 CSP 用 script-src 'strict-dynamic' + sha256，
+    # 在 Chrome 158+ 会整页白屏（CSP 校验失败）。2.58.1 改用 'self' 修复该问题，
+    # 见 https://github.com/temporalio/ui/releases/tag/v2.58.1。升级 chart 时需复核这个 pin。
+    tag: "2.58.1"
 admintools:
   enabled: true
