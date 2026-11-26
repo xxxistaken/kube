@@ -64,5 +64,11 @@ web:
     # 在 Chrome 158+ 会整页白屏（CSP 校验失败）。2.58.1 改用 'self' 修复该问题，
     # 见 https://github.com/temporalio/ui/releases/tag/v2.58.1。升级 chart 时需复核这个 pin。
     tag: "2.58.1"
+  additionalEnv:
+    # UI 只通过 http 访问（无 TLS），浏览器会丢弃带 Secure 的 _csrf Cookie，
+    # 导致 POST 报 missing csrf token in request header。该变量让 CSRF Cookie
+    # 不再带 Secure。仅本地开发可用；接入 TLS 后必须删掉。
+    - name: TEMPORAL_CSRF_COOKIE_INSECURE
+      value: "true"
 admintools:
   enabled: true
